@@ -1,10 +1,22 @@
--- Secure Copy
+/*
+
+* NAME: Secure Communication Encryption
+*
+* AUTHOR: paradox
+*
+* VERSION: 2.5
+*
+* GITHUB: https://github.com/pparadoxx/Secure-Communication-Encryption
+*
+* DESCRIPTION: A secure way to encrypt and decrypt data.
+
+*/
 local G = table.Copy(_G)
 
--- Global Table
-sce = {}
+-- Local Table
+local sce = {}
 
--- Generate Key
+-- Key Generator 
 function sce.Key(length)
     if !length then length = 64 end 
 
@@ -17,110 +29,96 @@ function sce.Key(length)
     return str 
 end
 
--- Table Hash
-function sce.HashTable(tab)
-    if !tab || !G.istable(tab) then return end 
+-- Hash
+function sce.Hash(str, desiredLength)
+    local sha = G.util.SHA256(str)
 
-    local str = ""
+    desiredLength = G.tostring(desiredLength) // ???
 
-    for k,v in G.pairs(tab) do
-        local gi = G.debug.getinfo( v )
+    if #sha < 256 then 
+        sha = G.string.rep(sha, 4, "")
+    end
 
-        str = str .. G.util.MD5(G.util.TypeToString(gi.linedefined .. " " .. gi.short_src))
-    end 
+    if sha >= desiredLength then return sha end 
 
-    return G.util.SHA256(str)
-end
-
--- Error Handler
-function sce.HandleErrors(errtype,ply)
-    // Update
-    return
-end
-
--- Hash Key
-function sce.Hash(str) // Returns a 1024 long hashed key
-    local sha = G.util.SHA256(str) // Largest one carried by default in GLua
-    return G.string.rep(sha, 16)
+    return G.string.rep(sha, G.math.ceil(desiredLength/#sha))
 end
 
 -- To ASCII
-function sce.ToASCII(table)
-    for k,v in G.ipairs(table) do 
-        if !isstring(v) then return end 
+function sce.ToASCII(tbl)
+    for k,v in G.ipairs(tbl) do 
+        if !G.isstring(v) then continue end 
 
-        table[k] = G.string.byte(v)
+        tbl[k] = G.string.byte(v)
     end
 
-    return table 
+    return tbl 
 end
 
--- Encryption
+-- Encrypt 
 function sce.Encrypt(str,key)
-    str = sce.ToASCII(str:ToTable()) // Convert to a table and then convert those strings in the table into numbers (ie: a = 97)
-    key = sce.ToASCII(sce.Hash(key):ToTable()) 
+    key = sce.ToASCII(G.string.ToTable(sce.Hash(key, #str)))
+    str = sce.ToASCII(G.string.ToTable(str))
 
-    // MATH //
-    for k,v in G.ipairs(str) do
-        local kv = key[k] 
-
-        str[k] = (v+kv)
-    end
-
-    // SHIFT ROWS & SWAP //
+    // MATH \\
     for k,v in G.ipairs(str) do 
-        local kv = key[k] 
+        local ke = key[k]
 
-        str[k] = G.bit.bswap(G.bit.rol(v, kv)) // DEVNOTE: Reverse: bit.ror(bit.bswap(v), kv)
+        str[k] = v + ke
     end
 
-    // XOR // 
+    // XOR \\
     for k,v in G.ipairs(str) do 
-        local kv = key[k] 
+        local ke = key[k]
 
-        str[k] = G.bit.bxor(v, kv)
+        str[k] = G.bit.bxor(v,ke)
     end
 
+    // SWAP & ROLL \\
+    for k,v in G.ipairs(str) do 
+        local ke = key[k]
 
-    return G.util.Base64Encode(G.table.concat(str, " "))
-end
+        str[k] = G.bit.bswap(G.bit.rol(v,ke))
+    end
 
--- Decryption
+    // REBUILD \\
+    str = G.table.concat(str, " ")
+
+    return G.util.Base64Encode(str) 
+end 
+
+-- Decrypt
 function sce.Decrypt(str,key)
     str = G.string.Split(G.util.Base64Decode(str), " ")
-    key = sce.ToASCII(sce.Hash(key):ToTable()) 
+    key = sce.ToASCII(G.string.ToTable(sce.Hash(key, #str)))
 
-    // XOR // 
+    // SHIFT & ROLL \\
     for k,v in G.ipairs(str) do 
-        local kv = key[k] 
+        local ke = key[k]
 
-        str[k] = G.bit.bxor(v, kv)
+        str[k] = G.bit.ror(G.bit.bswap(v),ke)
     end
 
-    // SHIFT ROWS & SWAP //
+    // XOR \\
     for k,v in G.ipairs(str) do 
-        local kv = key[k] 
+        local ke = key[k]
 
-        str[k] = G.bit.ror(G.bit.bswap(v), kv)
+        str[k] = G.bit.bxor(v,ke)
     end
 
-    // MATH //
-    for k,v in G.ipairs(str) do
-        local kv = key[k] 
-
-        str[k] = (v-kv)
-    end
-
-    // REBUILD //
+    // MATH \\
     for k,v in G.ipairs(str) do 
-        local success, code = G.pcall(G.string.char, v)
-        
-        if success then 
-            str[k] = code 
-        else
-            return sce.HandleErrors("Invalid Return Data")
-        end
+        local ke = key[k]
+
+        str[k] = (v-ke)
     end
 
-    return G.table.concat(str)
+    // REBUILD \\
+    for k,v in G.ipairs(str) do    
+        str[k] = G.string.char(v) 
+    end
+
+    return table.concat(str)
 end
+
+return sce 
