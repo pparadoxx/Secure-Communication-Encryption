@@ -4,7 +4,7 @@
 *
 * AUTHOR: paradox
 *
-* VERSION: 2.5
+* VERSION: 3.0
 *
 * GITHUB: https://github.com/pparadoxx/Secure-Communication-Encryption
 *
@@ -13,8 +13,8 @@
 */
 local G = table.Copy(_G)
 
--- Local Table
-local sce = {}
+-- Table
+sce = {}
 
 -- Key Generator 
 function sce.Key(length)
@@ -42,6 +42,25 @@ function sce.Hash(str, desiredLength)
     if sha >= desiredLength then return sha end 
 
     return G.string.rep(sha, G.math.ceil(desiredLength/#sha))
+end
+
+-- Table Hash
+function sce.HashTable(tbl)
+    if !tbl || !G.istable(tbl) then return end 
+
+    local str = ""
+
+    for k,v in G.pairs(tbl) do
+        if G.isfunction(v) then 
+            local gi = G.debug.getinfo( v )
+
+            str = str .. G.util.MD5(G.util.TypeToString(gi.linedefined .. " " .. gi.short_src))
+        elseif (G.isstring(v) || G.isnumber(v)) then 
+             str = str .. G.util.MD5(v)
+        end
+    end 
+
+    return G.util.SHA256(str)
 end
 
 -- To ASCII
@@ -89,6 +108,8 @@ end
 
 -- Decrypt
 function sce.Decrypt(str,key)
+    if !str || !key then return end 
+
     str = G.string.Split(G.util.Base64Decode(str), " ")
     key = sce.ToASCII(G.string.ToTable(sce.Hash(key, #str)))
 
@@ -115,10 +136,14 @@ function sce.Decrypt(str,key)
 
     // REBUILD \\
     for k,v in G.ipairs(str) do    
-        str[k] = G.string.char(v) 
+        local valid,success = G.pcall(G.string.char, v)
+
+        if valid then
+            str[k] = success
+        else
+            return nil 
+        end 
     end
 
     return table.concat(str)
 end
-
-return sce 
